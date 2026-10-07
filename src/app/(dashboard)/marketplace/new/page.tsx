@@ -58,15 +58,24 @@ export default function NewListingPage() {
   }
   // ──────────────────────────────────────────────────────────────────────────
 
-  const uploadImage = async (file: File) => {
+  const uploadToCloudinary = async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch('/api/upload', {
+    const res = await fetch('/api/cloudinary/upload', {
       method: 'POST',
       body: formData,
     })
-    const data = await res.json()
-    if (!res.ok || !data.url) throw new Error(data.error ?? 'Upload failed')
+    const text = await res.text()
+    let data: any = {}
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new Error('Upload server returned an invalid response. Please try again.')
+    }
+
+    if (!res.ok || !data.url) {
+      throw new Error(data.error ?? 'Cloudinary upload failed')
+    }
     return data.url as string
   }
 
@@ -75,7 +84,7 @@ export default function NewListingPage() {
     if (!file) return
     if (file.size > 5 * 1024 * 1024) { alert('File too large. Max 5MB.'); return }
     setUploading(true)
-    try { const url = await uploadImage(file); setImageUrl(url) }
+    try { const url = await uploadToCloudinary(file); setImageUrl(url) }
     catch (err: any) { alert(err?.message || 'Upload failed.') }
     finally { setUploading(false) }
   }
@@ -86,7 +95,7 @@ export default function NewListingPage() {
     if (!file) return
     if (file.size > 5 * 1024 * 1024) { alert('File too large. Max 5MB.'); return }
     setUploading(true)
-    try { const url = await uploadImage(file); setImageUrl(url) }
+    try { const url = await uploadToCloudinary(file); setImageUrl(url) }
     catch (err: any) { alert(err?.message || 'Upload failed.') }
     finally { setUploading(false) }
   }
