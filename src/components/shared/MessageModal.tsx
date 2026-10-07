@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { X, Send, MessageCircle, Phone } from 'lucide-react'
+import { X, Send, MessageCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
-import ActiveCallOverlay from '@/components/shared/ActiveCallOverlay'
 
 interface MessageModalProps {
   isOpen: boolean
@@ -19,8 +18,6 @@ interface MessageModalProps {
   listingTitle?: string
 }
 
-type CallStatus = 'connecting' | 'ringing' | 'active' | 'ended' | 'failed'
-
 export default function MessageModal({
   isOpen,
   onClose,
@@ -33,10 +30,6 @@ export default function MessageModal({
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
-
-  // Call state
-  const [callStatus, setCallStatus] = useState<CallStatus | null>(null)
-  const [calling, setCalling] = useState(false)
 
   useEffect(() => {
     if (!isOpen || !receiver?.id) return
@@ -78,54 +71,7 @@ export default function MessageModal({
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
 
-  const handleCall = async () => {
-    if (calling) return
-    setCalling(true)
-    setCallStatus('connecting')
-
-    try {
-      const res = await fetch('/api/call', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receiver_id: receiver.id }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        toast.error(data.error ?? 'Could not start call')
-        setCallStatus('failed')
-        setCalling(false)
-        return
-      }
-
-      // Twilio is now calling the current user's phone.
-      // We show "connecting" → after a few seconds move to "ringing" to reflect real flow.
-      toast.success(data.message ?? 'Calling you now…')
-
-      setTimeout(() => setCallStatus('ringing'), 4000)
-      setTimeout(() => setCallStatus('active'), 12000)
-
-      // After 3 min auto-mark ended (safety fallback — real end is when user hangs up their phone)
-      setTimeout(() => {
-        setCallStatus('ended')
-        setCalling(false)
-      }, 3 * 60 * 1000)
-
-    } catch {
-      toast.error('Failed to initiate call. Please try again.')
-      setCallStatus('failed')
-      setCalling(false)
-    }
-  }
-
-  const dismissCall = () => {
-    setCallStatus(null)
-    setCalling(false)
-  }
-
   return (
-    <>
       <AnimatePresence>
         {isOpen && (
           <>
@@ -169,41 +115,6 @@ export default function MessageModal({
                   <p style={{ fontWeight: 700, fontSize: '14px', color: 'var(--on-surface)', fontFamily: 'var(--font-manrope)' }}>{receiver.full_name}</p>
                   {listingTitle && <p style={{ fontSize: '11px', color: 'var(--outline)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>re: {listingTitle}</p>}
                 </div>
-
-                {/* ── Call button ── */}
-                <button
-                  onClick={handleCall}
-                  disabled={calling}
-                  title={calling ? 'Call in progress…' : `Call ${receiver.full_name}`}
-                  style={{
-                    width: '32px', height: '32px', borderRadius: '10px', flexShrink: 0,
-                    background: calling
-                      ? 'linear-gradient(135deg,#22c55e,#16a34a)'
-                      : 'var(--surface-container)',
-                    border: '1px solid var(--border)',
-                    cursor: calling ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: calling ? 'white' : 'var(--on-surface-variant)',
-                    transition: 'all 0.2s',
-                    marginRight: '4px',
-                  }}
-                  onMouseEnter={e => {
-                    if (!calling) {
-                      e.currentTarget.style.background = 'linear-gradient(135deg,#3525cd,#712ae2)'
-                      e.currentTarget.style.color = 'white'
-                      e.currentTarget.style.borderColor = 'transparent'
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (!calling) {
-                      e.currentTarget.style.background = 'var(--surface-container)'
-                      e.currentTarget.style.color = 'var(--on-surface-variant)'
-                      e.currentTarget.style.borderColor = 'var(--border)'
-                    }
-                  }}
-                >
-                  <Phone size={14} />
-                </button>
 
                 <button onClick={onClose} style={{ width: '30px', height: '30px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: 'var(--surface-container)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--on-surface-variant)' }}>
                   <X size={14} />
@@ -293,15 +204,5 @@ export default function MessageModal({
           </>
         )}
       </AnimatePresence>
-
-      {/* Active call overlay — renders outside the modal so it persists if modal closes */}
-      {callStatus && (
-        <ActiveCallOverlay
-          receiverName={receiver.full_name}
-          status={callStatus}
-          onDismiss={dismissCall}
-        />
-      )}
-    </>
   )
 }

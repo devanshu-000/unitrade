@@ -58,17 +58,16 @@ export default function NewListingPage() {
   }
   // ──────────────────────────────────────────────────────────────────────────
 
-  const uploadToCloudinary = async (file: File) => {
+  const uploadImage = async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!)
-    const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-      { method: 'POST', body: formData }
-    )
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    })
     const data = await res.json()
-    if (!data.secure_url) throw new Error(data.error?.message ?? 'Upload failed')
-    return data.secure_url as string
+    if (!res.ok || !data.url) throw new Error(data.error ?? 'Upload failed')
+    return data.url as string
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,8 +75,8 @@ export default function NewListingPage() {
     if (!file) return
     if (file.size > 5 * 1024 * 1024) { alert('File too large. Max 5MB.'); return }
     setUploading(true)
-    try { const url = await uploadToCloudinary(file); setImageUrl(url) }
-    catch { alert('Upload failed. Check your Cloudinary settings.') }
+    try { const url = await uploadImage(file); setImageUrl(url) }
+    catch (err: any) { alert(err?.message || 'Upload failed.') }
     finally { setUploading(false) }
   }
 
@@ -87,8 +86,8 @@ export default function NewListingPage() {
     if (!file) return
     if (file.size > 5 * 1024 * 1024) { alert('File too large. Max 5MB.'); return }
     setUploading(true)
-    try { const url = await uploadToCloudinary(file); setImageUrl(url) }
-    catch { alert('Upload failed. Check your Cloudinary settings.') }
+    try { const url = await uploadImage(file); setImageUrl(url) }
+    catch (err: any) { alert(err?.message || 'Upload failed.') }
     finally { setUploading(false) }
   }
 
