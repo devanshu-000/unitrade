@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 
 function buildDaySlots(fromDate: string, toDate: string) {
@@ -75,6 +75,27 @@ export async function POST(req: NextRequest) {
     computedPrice = parseFloat(price_per_hour)
   }
   const supabase = getSupabaseAdmin()
+
+  // Ensure user exists in Supabase users table before inserting listing
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', userId)
+    .single()
+
+  if (!existingUser) {
+    const user = await currentUser()
+    await supabase.from('users').upsert(
+      {
+        id: userId,
+        email: user?.emailAddresses[0]?.emailAddress ?? '',
+        full_name: user?.fullName ?? '',
+        avatar_url: user?.imageUrl ?? '',
+      },
+      { onConflict: 'id' }
+    )
+  }
+
   const { data, error } = await supabase
     .from('listings')
     .insert({

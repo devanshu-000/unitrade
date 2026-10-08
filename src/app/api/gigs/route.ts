@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
 import { getSupabaseAdmin } from '@/lib/supabase/admin'
 
 export async function GET() {
@@ -26,6 +26,26 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin()
+
+  // Ensure user exists in Supabase users table
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', userId)
+    .single()
+
+  if (!existingUser) {
+    const user = await currentUser()
+    await supabase.from('users').upsert(
+      {
+        id: userId,
+        email: user?.emailAddresses[0]?.emailAddress ?? '',
+        full_name: user?.fullName ?? '',
+        avatar_url: user?.imageUrl ?? '',
+      },
+      { onConflict: 'id' }
+    )
+  }
 
   // Build insert — omit price_type/delivery_time initially to test if columns exist
   const insertData: Record<string, unknown> = {

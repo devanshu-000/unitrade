@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
-import { supabase } from '@/lib/supabase/client'
 
 export function useUserSync() {
   const { user, isLoaded } = useUser()
@@ -11,24 +10,14 @@ export function useUserSync() {
     if (!isLoaded || !user) return
 
     const syncUser = async () => {
-      const { data: existing } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', user.id)
-        .single()
-
-      if (!existing) {
-        await supabase.from('users').insert({
-          id: user.id,
-          email: user.emailAddresses[0]?.emailAddress ?? '',
-          full_name: user.fullName ?? '',
-          avatar_url: user.imageUrl ?? '',
-          trust_score: 0,
-          total_transactions: 0,
-        })
+      try {
+        await fetch('/api/users/sync', { method: 'POST' })
+      } catch (err) {
+        console.error('Failed to sync user:', err)
       }
     }
 
     syncUser()
   }, [isLoaded, user])
 }
+
