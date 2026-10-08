@@ -65,7 +65,7 @@ export async function PATCH(
   // Fetch the borrow request
   const { data: borrow, error: fetchErr } = await supabase
     .from('borrow_requests')
-    .select('lender_id, requester_id, item_name, status')
+    .select('lender_id, requester_id, item_name, status, payment_status, total_amount')
     .eq('id', id)
     .single()
 
@@ -81,8 +81,11 @@ export async function PATCH(
     if (borrow.requester_id !== userId)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    if (!['accepted'].includes(borrow.status))
+    if (borrow.status !== 'accepted')
       return NextResponse.json({ error: 'Cannot mark as returned in current state' }, { status: 409 })
+
+    if (Number(borrow.total_amount) > 0 && borrow.payment_status !== 'paid')
+      return NextResponse.json({ error: 'Payment is required before this item can be returned' }, { status: 409 })
 
     updatePayload = {
       status: 'return_requested',
@@ -138,6 +141,9 @@ export async function PATCH(
   else if (action === 'lender_deny') {
     if (borrow.lender_id !== userId)
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+    if (borrow.status !== 'return_requested')
+      return NextResponse.json({ error: 'No pending return to deny' }, { status: 409 })
 
     updatePayload = {
       status: 'accepted',             // revert to active

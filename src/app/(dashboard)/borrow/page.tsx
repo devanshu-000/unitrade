@@ -87,6 +87,22 @@ export default function BorrowPage() {
     }
   }
 
+  const handleMarkReturned = async (id: string) => {
+    setUpdating(id)
+    const res = await fetch(`/api/borrow/${id}/return-flow`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'borrower_returned' }),
+    })
+    setUpdating(null)
+    if (res.ok) {
+      toast.success('Marked as returned. Waiting for the lender to confirm.')
+      fetchData()
+    } else {
+      const err = await res.json().catch(() => ({}))
+      toast.error(err.error ?? 'Failed to update request')
+    }
+  }
+
   // FIX: payment handler — only called after lender approves (status === 'accepted')
   const handlePay = async (req: any) => {
     if (paying) return
@@ -290,8 +306,8 @@ export default function BorrowPage() {
                     </button>
                   )}
                   {/* FIX: show Mark Returned only after payment is done */}
-                  {req.status === 'active' && (
-                    <button onClick={() => handleStatusUpdate(req.id, 'returned')} disabled={updating === req.id}
+                  {req.status === 'accepted' && (req.payment_status === 'paid' || !req.total_amount) && (
+                    <button onClick={() => handleMarkReturned(req.id)} disabled={updating === req.id}
                       style={{ fontSize: '11px', color: '#15803d', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       Mark Returned <ArrowRight size={12} />
                     </button>

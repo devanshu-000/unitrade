@@ -39,9 +39,24 @@ export async function POST(req: NextRequest) {
   if (!item_name || !lender_id) {
     return NextResponse.json({ error: 'item_name and lender_id required' }, { status: 400 })
   }
+  if (total_amount != null && (!Number.isFinite(Number(total_amount)) || Number(total_amount) < 0)) {
+    return NextResponse.json({ error: 'Invalid total_amount' }, { status: 400 })
+  }
 
   // ✅ SINGLE declaration (keep only this one)
   const supabase = getSupabaseAdmin()
+
+  // The lender must be the listing's owner, so payment cannot be routed to someone else.
+  let resolvedLender = lender_id
+  if (listing_id) {
+    const { data: listing } = await supabase
+      .from('listings').select('user_id').eq('id', listing_id).single()
+    if (!listing) return NextResponse.json({ error: 'Listing not found' }, { status: 404 })
+    if (listing.user_id === userId) {
+      return NextResponse.json({ error: 'Cannot borrow your own item' }, { status: 400 })
+    }
+    resolvedLender = listing.user_id
+  }
 
   // Duplicate request prevention
   if (listing_id) {
@@ -107,7 +122,7 @@ export async function POST(req: NextRequest) {
       requester_id: userId,
       item_name,
       description: description ?? '',
-      lender_id,
+      lender_id: resolvedLender,
       listing_id: listing_id ?? null,
       borrow_from: resolvedFrom,
       borrow_until: resolvedUntil,
@@ -130,7 +145,7 @@ export async function POST(req: NextRequest) {
     .single()
 
   await supabase.from('notifications').insert({
-    user_id: lender_id,
+    user_id: resolvedLender,
     type: 'request',
     title: 'New borrow request',
     body: (requester?.full_name ?? 'Someone') + ' wants to borrow "' + item_name + '"',

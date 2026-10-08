@@ -31,7 +31,12 @@ export type BorrowRequest = {
   requester_id: string
   lender_id: string
   listing_id: string
-  status: 'pending' | 'accepted' | 'rejected' | 'returned'
+  status: 'pending' | 'accepted' | 'rejected' | 'returned' | 'return_requested' | 'completed'
+  payment_status?: 'unpaid' | 'pending' | 'paid' | 'failed' | null
+  total_amount?: number | null
+  duration_type?: string | null
+  selected_slots?: string[] | null
+  razorpay_payment_id?: string | null
   borrow_from: string
   borrow_until: string
   returned_at: string

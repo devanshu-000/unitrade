@@ -20,13 +20,14 @@ export async function PATCH(
     .eq('id', id)
     .single()
 
-  console.log('userId:', userId)
-  console.log('lender_id:', borrow?.lender_id)
-  console.log('fetchErr:', fetchErr)
+  if (fetchErr || !borrow) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  if (!borrow) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // Only the lender may approve or reject. Returns go through /return-flow and
+  // payment fields are written only by /api/razorpay/verify.
+  if (!['accepted', 'rejected'].includes(status))
+    return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
 
-  if (['accepted', 'rejected'].includes(status) && borrow.lender_id !== userId)
+  if (borrow.lender_id !== userId)
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // FIX: idempotency — if already in that status, return current data without re-notifying
@@ -34,6 +35,9 @@ export async function PATCH(
     .from('borrow_requests').select('status').eq('id', id).single()
   if (current?.status === status) {
     return NextResponse.json(current)
+  }
+  if (current?.status !== 'pending') {
+    return NextResponse.json({ error: 'Request is no longer pending' }, { status: 409 })
   }
 
   const { data, error } = await supabase

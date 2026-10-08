@@ -39,10 +39,18 @@ export async function POST(req: NextRequest) {
     borrow_request_id,   // FIX: included in body so we can update borrow_request after payment
   } = await req.json()
 
+  if (!process.env.RAZORPAY_KEY_SECRET) {
+    console.error('[razorpay/verify] RAZORPAY_KEY_SECRET is not set')
+    return NextResponse.json({ error: 'Payment not configured' }, { status: 503 })
+  }
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature || !db_order_id) {
+    return NextResponse.json({ error: 'Missing payment details' }, { status: 400 })
+  }
+
   // Verify signature
   const body = razorpay_order_id + '|' + razorpay_payment_id
   const expectedSignature = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
     .update(body)
     .digest('hex')
 
@@ -51,6 +59,18 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin()
+
+  // The signature only proves this Razorpay order was paid. Make sure the DB order
+  // really belongs to the caller and to that Razorpay order, so a cheap payment
+  // cannot be replayed against a different order.
+  const { data: existing } = await supabase
+    .from('orders')
+    .select('id, buyer_id, razorpay_order_id')
+    .eq('id', db_order_id)
+    .single()
+  if (!existing || existing.buyer_id !== userId || existing.razorpay_order_id !== razorpay_order_id) {
+    return NextResponse.json({ error: 'Order mismatch' }, { status: 403 })
+  }
 
   // Update order to paid + completed
   const { data, error } = await supabase
@@ -100,11 +120,13 @@ export async function POST(req: NextRequest) {
     await supabase
       .from('borrow_requests')
       .update({
-        status: 'active',
+        // Status stays 'accepted' (the app's "active borrow" state, used by the
+        // activity feed and return-flow). payment_status marks it paid.
         payment_status: 'paid',
         razorpay_payment_id,
       })
       .eq('id', borrow_request_id)
+      .eq('requester_id', userId)
       .eq('status', 'accepted') // idempotency guard
 
     // Notify borrower of successful payment
